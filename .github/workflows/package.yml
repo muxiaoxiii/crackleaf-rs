@@ -22,8 +22,6 @@ jobs:
       QPDF_VERSION: "12.2.0"
       HTTP_PROXY: ""
       HTTPS_PROXY: ""
-      http_proxy: ""
-      https_proxy: ""
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
