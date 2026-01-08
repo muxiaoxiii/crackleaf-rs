@@ -463,7 +463,9 @@ impl eframe::App for CrackLeafApp {
         egui::CentralPanel::default()
             .frame(Frame::none().fill(Color32::from_rgb(0xFC, 0xF5, 0xEA)))
             .show(ctx, |ui| {
-                ui.vertical_centered(|ui| {
+                let list_width = (ui.available_width() - 40.0).max(200.0);
+
+                ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                     let logo_size = (WINDOW_WIDTH * 0.5).clamp(60.0, 240.0);
                     let image = egui::Image::new(self.current_texture())
                         .fit_to_exact_size(Vec2::splat(logo_size));
@@ -526,14 +528,7 @@ impl eframe::App for CrackLeafApp {
                 });
 
                 if self.file_entries.len() > 1 {
-                    let _max_list_height = if self.file_entries.len() >= LIST_GROW_START {
-                        WINDOW_HEIGHT_MAX - WINDOW_HEIGHT_BASE
-                    } else {
-                        (self.file_entries.len().saturating_sub(1) as f32) * 40.0
-                    };
-
-                    let list_width = (ui.available_width() - 20.0).max(200.0);
-                    let available_height = (ui.available_height() - 40.0).max(60.0);
+                    let available_height = (ui.available_height() - 40.0).max(80.0);
                     ui.horizontal_centered(|ui| {
                         ui.allocate_ui_with_layout(
                             Vec2::new(list_width, available_height),
@@ -612,8 +607,7 @@ impl eframe::App for CrackLeafApp {
                 }
 
                 if !self.result_text.is_empty() {
-                    let offset = (ui.available_height() - 36.0).max(0.0);
-                    ui.add_space(offset);
+                    ui.add_space(8.0);
                     ui.vertical_centered(|ui| {
                         ui.label(&self.result_text);
                     });
