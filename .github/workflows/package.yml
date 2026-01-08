@@ -4,51 +4,142 @@ on:
   workflow_dispatch:
 
 jobs:
-  windows-x64:
+  windows:
     runs-on: windows-latest
+    strategy:
+      matrix:
+        include:
+          - arch: x64
+            triplet: x64-windows-static
+            target: x86_64-pc-windows-msvc
+          - arch: x86
+            triplet: x86-windows-static
+            target: i686-pc-windows-msvc
+    env:
+      QPDF_VERSION: "12.2.0"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Build release
+        with:
+          targets: ${{ matrix.target }}
+      - uses: lukka/run-vcpkg@v11
+      - name: Install qpdf deps (vcpkg)
+        shell: pwsh
+        run: |
+          vcpkg install zlib libjpeg-turbo openssl --triplet ${{ matrix.triplet }}
+      - name: Build qpdf from source
+        shell: pwsh
+        run: |
+          $ver = "${{ env.QPDF_VERSION }}"
+          $url = "https://github.com/qpdf/qpdf/releases/download/v$ver/qpdf-$ver.tar.gz"
+          Invoke-WebRequest $url -OutFile qpdf.tar.gz
+          tar -xf qpdf.tar.gz
+          $src = "qpdf-$ver"
+          cmake -S $src -B qpdf-build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
+            -DBUILD_SHARED_LIBS=OFF `
+            -DQPDF_BUILD_TESTS=OFF `
+            -DQPDF_BUILD_DOCS=OFF
+          cmake --build qpdf-build --config Release
+      - name: Build CrackLeaf
         working-directory: crackleaf-rs
-        run: cargo build --release
+        shell: pwsh
+        run: cargo build --release --target ${{ matrix.target }}
       - name: Assemble dist
         working-directory: crackleaf-rs
         shell: pwsh
         run: |
-          $dist = "dist"
+          $dist = \"dist-${{ matrix.arch }}\"
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
-          Copy-Item "target/release/crackleaf-rs.exe" "$dist/CrackLeaf.exe"
-          Copy-Item "tools/qpdf.exe" "$dist/" -ErrorAction Stop
-          Get-ChildItem "tools" -Filter "*.dll" | ForEach-Object { Copy-Item $_.FullName "$dist/" }
-          Copy-Item "assets" "$dist/assets" -Recurse
+          Copy-Item \"target/${{ matrix.target }}/release/crackleaf-rs.exe\" \"$dist/CrackLeaf.exe\"
+          $qpdf = Get-ChildItem \"$GITHUB_WORKSPACE/qpdf-build\" -Recurse -Filter qpdf.exe | Select-Object -First 1
+          if ($null -eq $qpdf) { throw \"qpdf.exe not found\" }
+          Copy-Item $qpdf.FullName \"$dist/qpdf.exe\"
+          Copy-Item \"assets\" \"$dist/assets\" -Recurse
+          if (Test-Path \"tools\") {
+            Get-ChildItem \"tools\" -Filter \"*.dll\" | ForEach-Object { Copy-Item $_.FullName \"$dist/\" }
+          }
       - name: Zip
         working-directory: crackleaf-rs
         shell: pwsh
         run: |
-          if (Test-Path "CrackLeaf-win-x64.zip") { Remove-Item "CrackLeaf-win-x64.zip" }
-          Compress-Archive -Path "dist/*" -DestinationPath "CrackLeaf-win-x64.zip"
+          $zip = \"CrackLeaf-win-${{ matrix.arch }}.zip\"
+          if (Test-Path $zip) { Remove-Item $zip }
+          Compress-Archive -Path \"dist-${{ matrix.arch }}/*\" -DestinationPath $zip
       - uses: actions/upload-artifact@v4
         with:
-          name: CrackLeaf-win-x64
-          path: crackleaf-rs/CrackLeaf-win-x64.zip
+          name: CrackLeaf-win-${{ matrix.arch }}
+          path: crackleaf-rs/CrackLeaf-win-${{ matrix.arch }}.zip
 
-  macos-app:
-    runs-on: macos-latest
+  windows-universal:
+    runs-on: windows-latest
+    needs: windows
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: CrackLeaf-win-x64
+          path: dist/x64
+      - uses: actions/download-artifact@v4
+        with:
+          name: CrackLeaf-win-x86
+          path: dist/x86
+      - name: Assemble universal zip
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist/universal | Out-Null
+          Expand-Archive dist/x64/CrackLeaf-win-x64.zip -DestinationPath dist/universal/x64
+          Expand-Archive dist/x86/CrackLeaf-win-x86.zip -DestinationPath dist/universal/x86
+          Compress-Archive -Path dist/universal/* -DestinationPath CrackLeaf-win-universal.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-win-universal
+          path: CrackLeaf-win-universal.zip
+
+  macos:
+    runs-on: macos-14
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-apple-darwin
       - name: Install cargo-bundle
         run: cargo install cargo-bundle
-      - name: Build app bundle
+      - name: Build arm64 app
         working-directory: crackleaf-rs
         run: cargo bundle --release
-      - name: Zip app
+      - name: Build x86_64 app
+        working-directory: crackleaf-rs
+        run: cargo bundle --release --target x86_64-apple-darwin
+      - name: Create universal app
         working-directory: crackleaf-rs
         run: |
-          APP_PATH="target/release/bundle/osx/CrackLeaf.app"
-          zip -r CrackLeaf-mac.app.zip "$APP_PATH"
+          ARM_APP=\"target/release/bundle/osx/CrackLeaf.app\"
+          X86_APP=\"target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app\"
+          UNIVERSAL_APP=\"target/universal/CrackLeaf.app\"
+          rm -rf \"$UNIVERSAL_APP\"
+          mkdir -p \"target/universal\"
+          cp -R \"$ARM_APP\" \"$UNIVERSAL_APP\"
+          lipo -create \"$ARM_APP/Contents/MacOS/CrackLeaf\" \"$X86_APP/Contents/MacOS/CrackLeaf\" -output \"$UNIVERSAL_APP/Contents/MacOS/CrackLeaf\"
+      - name: Zip apps
+        working-directory: crackleaf-rs
+        run: |
+          zip -r CrackLeaf-mac-arm64.app.zip \"target/release/bundle/osx/CrackLeaf.app\"
+          zip -r CrackLeaf-mac-x86_64.app.zip \"target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app\"
+          zip -r CrackLeaf-mac-universal.app.zip \"target/universal/CrackLeaf.app\"
       - uses: actions/upload-artifact@v4
         with:
-          name: CrackLeaf-mac
-          path: crackleaf-rs/CrackLeaf-mac.app.zip
+          name: CrackLeaf-mac-arm64
+          path: crackleaf-rs/CrackLeaf-mac-arm64.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-mac-x86_64
+          path: crackleaf-rs/CrackLeaf-mac-x86_64.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-mac-universal
+          path: crackleaf-rs/CrackLeaf-mac-universal.app.zip

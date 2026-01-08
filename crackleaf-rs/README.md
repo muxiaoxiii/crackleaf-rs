@@ -41,8 +41,10 @@ If qpdf is not installed, the app will prompt to install it via Homebrew.
 
 ### Windows (zip)
 
-Use the GitHub Actions workflow `package` to build a zip that includes:
+Use the GitHub Actions workflow `package` to build:
 
-- `CrackLeaf.exe`
-- `qpdf.exe` + required DLLs from `tools/`
-- `assets/`
+- `CrackLeaf-win-x86.zip`
+- `CrackLeaf-win-x64.zip`
+- `CrackLeaf-win-universal.zip` (contains both x86/x64)
+
+The workflow builds qpdf from source and bundles the resulting `qpdf.exe`.
