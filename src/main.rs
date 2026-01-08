@@ -916,3 +916,4 @@ fn main() -> eframe::Result<()> {
         Box::new(|cc| Ok(Box::new(CrackLeafApp::new(cc)))),
     )
 }
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]

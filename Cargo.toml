@@ -17,3 +17,8 @@ name = "CrackLeaf"
 identifier = "com.crackleaf.app"
 category = "public.app-category.productivity"
 resources = ["assets"]
+
+[build-dependencies]
+image = "0.25.5"
+ico = "0.3.0"
+winres = "0.1.12"

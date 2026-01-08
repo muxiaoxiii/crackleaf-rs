@@ -6,6 +6,9 @@ fn main() {
     use std::env;
     use std::fs;
     use std::path::{Path, PathBuf};
+    use image::imageops::FilterType;
+    use ico::{IconDir, IconImage};
+    use winres::WindowsResource;
 
     println!("cargo:rerun-if-env-changed=QPDF_PATH");
 
@@ -48,4 +51,34 @@ fn main() {
             }
         }
     }
+
+    let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap_or_default());
+    let png_path = manifest_dir.join("assets").join("crackleaf.png");
+    if png_path.exists() {
+        let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
+        let ico_path = out_dir.join("crackleaf.ico");
+        if let Err(err) = build_icon(&png_path, &ico_path) {
+            println!("cargo:warning=Failed to build icon: {err}");
+        } else {
+            let mut res = WindowsResource::new();
+            res.set_icon(ico_path.to_string_lossy().as_ref());
+            if let Err(err) = res.compile() {
+                println!("cargo:warning=Failed to set icon: {err}");
+            }
+        }
+    } else {
+        println!("cargo:warning=Icon source not found: assets/crackleaf.png");
+    }
+}
+
+fn build_icon(png_path: &Path, ico_path: &Path) -> std::io::Result<()> {
+    let image = image::open(png_path).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+    let resized = image.resize_exact(256, 256, FilterType::Lanczos3);
+    let rgba = resized.to_rgba8();
+    let icon_image = IconImage::from_rgba_data(256, 256, rgba.into_raw());
+    let mut icon_dir = IconDir::new(ico::ResourceType::Icon);
+    icon_dir.add_entry(icon_image);
+    let file = std::fs::File::create(ico_path)?;
+    icon_dir.write(file)?;
+    Ok(())
 }
