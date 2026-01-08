@@ -172,10 +172,7 @@ impl CrackLeafApp {
             ui.spacing_mut().item_spacing = Vec2::new(spacing, 4.0);
             ui.add_sized(Vec2::new(icon_width, 24.0), egui::Label::new(&entry.icon));
             ui.add_space(spacing);
-            ui.add_sized(
-                Vec2::new(text_width, 0.0),
-                egui::Label::new(filename).wrap(true),
-            );
+            ui.add_sized(Vec2::new(text_width, 0.0), egui::Label::new(filename).wrap());
             ui.add_space(spacing);
 
             if entry.output_path.is_some() {
