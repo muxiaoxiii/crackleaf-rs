@@ -263,10 +263,11 @@ impl CrackLeafApp {
 
     fn add_files(&mut self, paths: Vec<PathBuf>) {
         let mut added = false;
-        if self.had_unlock {
-            self.file_entries.clear();
-            self.result_text.clear();
-            self.had_unlock = false;
+        if self.had_unlock
+            || self.unlock_work_done
+            || self.file_entries.iter().any(|entry| entry.unlock_result.is_some())
+        {
+            self.reset_for_new_batch();
         }
         for path in paths {
             if !is_pdf(&path) {
@@ -292,6 +293,21 @@ impl CrackLeafApp {
         if added {
             self.result_text.clear();
         }
+    }
+
+    fn reset_for_new_batch(&mut self) {
+        self.file_entries.clear();
+        self.result_text.clear();
+        self.had_unlock = false;
+        self.unlock_work_done = false;
+        self.unlock_in_progress = false;
+        self.unlock_ready_for_success = false;
+        self.unlock_rx = None;
+        self.start_logo();
+    }
+
+    fn start_logo(&mut self) {
+        self.set_mode(AnimationMode::Logo);
     }
 
     fn start_unlock(&mut self) {
@@ -468,24 +484,32 @@ impl eframe::App for CrackLeafApp {
                     "点击或者拖入文件".to_string()
                 } else if self.file_entries.len() == 1 {
                     let entry = &self.file_entries[0];
-                    format!("{} {}", entry.icon, entry.path.file_name().unwrap_or_default().to_string_lossy())
+                    format!(
+                        "{} {}",
+                        entry.icon,
+                        entry.path.file_name().unwrap_or_default().to_string_lossy()
+                    )
                 } else {
                     format!("已导入 {} 个文件", self.file_entries.len())
                 };
-                ui.horizontal(|ui| {
-                    ui.label(hint);
-                    if self.file_entries.len() == 1 {
-                        let entry = &self.file_entries[0];
-                        if entry.output_path.is_some() {
-                            if ui
-                                .add_sized(Vec2::new(24.0, 24.0), egui::Button::new("开"))
-                                .clicked()
-                            {
-                                open_entry(entry);
+                ui.allocate_ui_with_layout(
+                    Vec2::new(ui.available_width(), 0.0),
+                    egui::Layout::left_to_right(egui::Align::Center).with_main_justify(true),
+                    |ui| {
+                        ui.label(hint);
+                        if self.file_entries.len() == 1 {
+                            let entry = &self.file_entries[0];
+                            if entry.output_path.is_some() {
+                                if ui
+                                    .add_sized(Vec2::new(28.0, 24.0), egui::Button::new("开"))
+                                    .clicked()
+                                {
+                                    open_entry(entry);
+                                }
                             }
                         }
-                    }
-                });
+                    },
+                );
 
                 if self.file_entries.len() > 1 {
                     let _max_list_height = if self.file_entries.len() >= LIST_GROW_START {
@@ -511,36 +535,38 @@ impl eframe::App for CrackLeafApp {
                                             .unwrap_or_default()
                                             .to_string_lossy();
                                         let icon = entry.icon.clone();
-                                        ui.horizontal(|ui| {
-                                            ui.label(icon);
-                                            let text_width = (ui.available_width() - 50.0).max(80.0);
-                                            let label = egui::Label::new(filename).wrap();
-                                            let label_response = ui
-                                                .add_sized(Vec2::new(text_width, 0.0), label)
-                                                .interact(egui::Sense::click());
+                                        ui.allocate_ui_with_layout(
+                                            Vec2::new(list_width, 0.0),
+                                            egui::Layout::left_to_right(egui::Align::Center),
+                                            |ui| {
+                                                ui.spacing_mut().item_spacing = Vec2::new(6.0, 4.0);
+                                                ui.add_sized(Vec2::new(24.0, 24.0), egui::Label::new(icon));
+                                                let can_open = entry.output_path.is_some();
+                                                let button_width = if can_open { 28.0 } else { 0.0 };
+                                                let text_width =
+                                                    (ui.available_width() - button_width).max(80.0);
+                                                let label = egui::Label::new(filename).wrap();
+                                                let label_response = ui
+                                                    .add_sized(Vec2::new(text_width, 0.0), label)
+                                                    .interact(egui::Sense::click());
 
-                                            let can_open = entry.output_path.is_some();
-                                            if can_open {
-                                                ui.with_layout(
-                                                    egui::Layout::right_to_left(egui::Align::Center),
-                                                    |ui| {
-                                                        if ui
-                                                            .add_sized(
-                                                                Vec2::new(24.0, 24.0),
-                                                                egui::Button::new("开"),
-                                                            )
-                                                            .clicked()
-                                                        {
-                                                            open_entry(entry);
-                                                        }
-                                                    },
-                                                );
-                                            }
+                                                if can_open {
+                                                    if ui
+                                                        .add_sized(
+                                                            Vec2::new(28.0, 24.0),
+                                                            egui::Button::new("开"),
+                                                        )
+                                                        .clicked()
+                                                    {
+                                                        open_entry(entry);
+                                                    }
+                                                }
 
-                                            if label_response.double_clicked() {
-                                                open_entry(entry);
-                                            }
-                                        });
+                                                if label_response.double_clicked() {
+                                                    open_entry(entry);
+                                                }
+                                            },
+                                        );
                                     }
                                 });
                         },
