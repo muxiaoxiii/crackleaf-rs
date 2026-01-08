@@ -185,15 +185,24 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
+      - name: Read version
+        id: version
+        run: |
+          VERSION=$(awk -F\" '/^version =/ {print $2; exit}' Cargo.toml)
+          if [ -z \"$VERSION\" ]; then echo \"version not found\"; exit 1; fi
+          echo \"version=$VERSION\" >> \"$GITHUB_OUTPUT\"
       - uses: actions/download-artifact@v4
         with:
           path: dist
+          merge-multiple: true
       - name: Collect artifacts
         run: |
           mkdir -p release
-          find dist -type f -name "*.zip" -o -name "*.dmg" -print0 | xargs -0 -I{} cp {} release/
+          find dist -type f \( -name "*.zip" -o -name "*.dmg" \) -print0 | xargs -0 -I{} cp {} release/
           ls -la release
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}-build.${{ github.run_number }}
+          target_commitish: ${{ github.sha }}
           files: release/*
