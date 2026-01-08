@@ -536,13 +536,6 @@ impl eframe::App for CrackLeafApp {
 
                         let hint = if self.file_entries.is_empty() {
                             "点击或者拖入文件".to_string()
-                        } else if self.file_entries.len() == 1 {
-                            let entry = &self.file_entries[0];
-                            format!(
-                                "{} {}",
-                                entry.icon,
-                                entry.path.file_name().unwrap_or_default().to_string_lossy()
-                            )
                         } else {
                             format!("已导入 {} 个文件", self.file_entries.len())
                         };
