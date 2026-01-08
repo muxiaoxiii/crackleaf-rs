@@ -105,16 +105,33 @@ jobs:
           fi
           mkdir -p "$APP_PATH/Contents/Resources/assets"
           cp -R assets/* "$APP_PATH/Contents/Resources/assets/"
-      - name: Bundle qpdf into app
+      - name: Build qpdf from source (static)
         run: |
           if [ -n "${{ matrix.target }}" ]; then
             APP_PATH="target/${{ matrix.target }}/release/bundle/osx/CrackLeaf.app"
           else
             APP_PATH="target/release/bundle/osx/CrackLeaf.app"
           fi
-          brew install qpdf
-          QPDF_BIN="$(brew --prefix qpdf)/bin/qpdf"
-          cp "$QPDF_BIN" "$APP_PATH/Contents/MacOS/qpdf"
+          brew install cmake ninja openssl@3 zlib libjpeg-turbo
+          OPENSSL_PREFIX="$(brew --prefix openssl@3)"
+          ZLIB_PREFIX="$(brew --prefix zlib)"
+          JPEG_PREFIX="$(brew --prefix libjpeg-turbo)"
+          curl -L "https://github.com/qpdf/qpdf/releases/download/v${QPDF_VERSION}/qpdf-${QPDF_VERSION}.tar.gz" -o qpdf.tar.gz
+          tar -xf qpdf.tar.gz
+          mkdir -p qpdf-build qpdf-install
+          cmake -S "qpdf-${QPDF_VERSION}" -B qpdf-build \
+            -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$PWD/qpdf-install" \
+            -DBUILD_SHARED_LIBS=OFF \
+            -DQPDF_BUILD_TESTS=OFF \
+            -DQPDF_BUILD_DOCS=OFF \
+            -DOPENSSL_ROOT_DIR="$OPENSSL_PREFIX" \
+            -DZLIB_ROOT="$ZLIB_PREFIX" \
+            -DJPEG_ROOT="$JPEG_PREFIX"
+          cmake --build qpdf-build
+          cmake --install qpdf-build
+          cp "qpdf-install/bin/qpdf" "$APP_PATH/Contents/MacOS/qpdf"
           chmod +x "$APP_PATH/Contents/MacOS/qpdf"
           bundle_deps() {
             local target="$1"
