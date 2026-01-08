@@ -18,6 +18,7 @@ name = "CrackLeaf"
 identifier = "com.crackleaf.app"
 category = "public.app-category.productivity"
 resources = ["assets"]
+icon = ["assets/crackleaf.icns"]
 short_description = "CrackLeaf"
 long_description = "CrackLeaf PDF unlocker"
 
