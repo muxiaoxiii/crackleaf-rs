@@ -66,61 +66,94 @@ jobs:
           path: CrackLeaf-win-${{ matrix.arch }}.zip
 
   macos:
-    runs-on: macos-14
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            arch: arm64
+            target: ""
+          - os: macos-13
+            arch: x86_64
+            target: x86_64-apple-darwin
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
+      QPDF_VERSION: "12.2.0"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
+        if: ${{ matrix.target != '' }}
         with:
-          targets: x86_64-apple-darwin
+          targets: ${{ matrix.target }}
+      - uses: dtolnay/rust-toolchain@stable
+        if: ${{ matrix.target == '' }}
       - name: Install cargo-bundle
         run: cargo install cargo-bundle
-      - name: Build arm64 app
-        run: cargo bundle --release
-      - name: Build x86_64 app
-        run: cargo bundle --release --target x86_64-apple-darwin
-      - name: Copy assets into app bundles
+      - name: Build app
         run: |
-          ARM_APP="target/release/bundle/osx/CrackLeaf.app"
-          X86_APP="target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app"
-          mkdir -p "$ARM_APP/Contents/Resources/assets"
-          mkdir -p "$X86_APP/Contents/Resources/assets"
-          cp -R assets/* "$ARM_APP/Contents/Resources/assets/"
-          cp -R assets/* "$X86_APP/Contents/Resources/assets/"
-      - name: Zip apps
+          if [ -n "${{ matrix.target }}" ]; then
+            cargo bundle --release --target ${{ matrix.target }}
+          else
+            cargo bundle --release
+          fi
+      - name: Copy assets into app bundle
         run: |
-          zip -r CrackLeaf-mac-arm64.app.zip "target/release/bundle/osx/CrackLeaf.app"
-          zip -r CrackLeaf-mac-x86_64.app.zip "target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app"
+          if [ -n "${{ matrix.target }}" ]; then
+            APP_PATH="target/${{ matrix.target }}/release/bundle/osx/CrackLeaf.app"
+          else
+            APP_PATH="target/release/bundle/osx/CrackLeaf.app"
+          fi
+          mkdir -p "$APP_PATH/Contents/Resources/assets"
+          cp -R assets/* "$APP_PATH/Contents/Resources/assets/"
+      - name: Bundle qpdf into app
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            APP_PATH="target/${{ matrix.target }}/release/bundle/osx/CrackLeaf.app"
+          else
+            APP_PATH="target/release/bundle/osx/CrackLeaf.app"
+          fi
+          brew install qpdf
+          QPDF_BIN="$(brew --prefix qpdf)/bin/qpdf"
+          cp "$QPDF_BIN" "$APP_PATH/Contents/MacOS/qpdf"
+          chmod +x "$APP_PATH/Contents/MacOS/qpdf"
+          bundle_deps() {
+            local target="$1"
+            local app_dir="$2"
+            local deps
+            deps=$(otool -L "$target" | awk 'NR>1 {print $1}' | grep -E '^(/opt/homebrew|/usr/local)/' || true)
+            for dep in $deps; do
+              local name
+              name=$(basename "$dep")
+              if [ ! -f "$app_dir/$name" ]; then
+                cp "$dep" "$app_dir/$name"
+                chmod 644 "$app_dir/$name"
+              fi
+              install_name_tool -change "$dep" "@executable_path/$name" "$target"
+            done
+          }
+          bundle_deps "$APP_PATH/Contents/MacOS/qpdf" "$APP_PATH/Contents/MacOS"
+          for lib in "$APP_PATH/Contents/MacOS"/*.dylib; do
+            [ -e "$lib" ] || continue
+            bundle_deps "$lib" "$APP_PATH/Contents/MacOS"
+            install_name_tool -id "@executable_path/$(basename "$lib")" "$lib"
+          done
       - name: Create dmg (drag to Applications)
         run: |
-          mkdir -p dist/dmg
-          for APP in arm64 x86_64; do
+          if [ -n "${{ matrix.target }}" ]; then
+            APP_PATH="target/${{ matrix.target }}/release/bundle/osx/CrackLeaf.app"
+          else
             APP_PATH="target/release/bundle/osx/CrackLeaf.app"
-            if [ "$APP" = "x86_64" ]; then APP_PATH="target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app"; fi
-            STAGING="dist/dmg/CrackLeaf-$APP"
-            rm -rf "$STAGING"
-            mkdir -p "$STAGING"
-            cp -R "$APP_PATH" "$STAGING/"
-            ln -s /Applications "$STAGING/Applications"
-            hdiutil create -volname "CrackLeaf" -srcfolder "$STAGING" -ov -format UDZO "CrackLeaf-mac-$APP.dmg"
-          done
+          fi
+          STAGING="dist/dmg/CrackLeaf-${{ matrix.arch }}"
+          rm -rf "$STAGING"
+          mkdir -p "$STAGING"
+          cp -R "$APP_PATH" "$STAGING/"
+          ln -s /Applications "$STAGING/Applications"
+          hdiutil create -volname "CrackLeaf" -srcfolder "$STAGING" -ov -format UDZO "CrackLeaf-mac-${{ matrix.arch }}.dmg"
       - uses: actions/upload-artifact@v4
         with:
-          name: CrackLeaf-mac-arm64
-          path: CrackLeaf-mac-arm64.app.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: CrackLeaf-mac-x86_64
-          path: CrackLeaf-mac-x86_64.app.zip
-      - uses: actions/upload-artifact@v4
-        with:
-          name: CrackLeaf-mac-arm64-dmg
-          path: CrackLeaf-mac-arm64.dmg
-      - uses: actions/upload-artifact@v4
-        with:
-          name: CrackLeaf-mac-x86_64-dmg
-          path: CrackLeaf-mac-x86_64.dmg
+          name: CrackLeaf-mac-${{ matrix.arch }}-dmg
+          path: CrackLeaf-mac-${{ matrix.arch }}.dmg
 
   release:
     runs-on: ubuntu-latest
