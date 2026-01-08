@@ -344,7 +344,14 @@ impl CrackLeafApp {
                     if let Some(entry) = self.file_entries.get_mut(index) {
                         entry.unlock_result = Some(success);
                         if success {
-                            entry.output_path = output_path;
+                            if let Some(output_path) = output_path {
+                                entry.output_path = Some(output_path);
+                            } else if let Some(false) = detect_encrypted(&entry.path) {
+                                entry.output_path = Some(entry.path.clone());
+                                entry.status = "未受限".to_string();
+                                entry.icon = "🔓".to_string();
+                                continue;
+                            }
                         }
                         if success {
                             entry.status = "解锁成功".to_string();
