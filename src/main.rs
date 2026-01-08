@@ -163,11 +163,9 @@ impl CrackLeafApp {
             .to_string_lossy();
 
         let icon_width = 24.0;
-        let status_width = 80.0;
         let button_width = 40.0;
         let spacing = 8.0;
-        let text_width = (row_width - icon_width - status_width - button_width - (spacing * 4.0))
-            .max(120.0);
+        let text_width = (row_width - icon_width - button_width - (spacing * 3.0)).max(120.0);
 
         ui.allocate_ui_with_layout(
             Vec2::new(row_width, 0.0),
@@ -178,12 +176,6 @@ impl CrackLeafApp {
                 ui.add_space(spacing);
                 ui.add_sized(Vec2::new(text_width, 0.0), egui::Label::new(filename).wrap());
                 ui.add_space(spacing);
-                ui.add_sized(
-                    Vec2::new(status_width, 24.0),
-                    egui::Label::new(&entry.status).truncate(),
-                );
-                ui.add_space(spacing);
-
                 if entry.output_path.is_some() {
                     if ui
                         .add_sized(Vec2::new(button_width, 24.0), egui::Button::new("开"))
