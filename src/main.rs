@@ -7,7 +7,18 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use eframe::egui::{self, Color32, ColorImage, Frame, IconData, TextureHandle, Vec2};
+use eframe::egui::{
+    self,
+    text::LayoutJob,
+    Color32,
+    ColorImage,
+    Frame,
+    IconData,
+    Label,
+    TextStyle,
+    TextureHandle,
+    Vec2,
+};
 use image::GenericImageView;
 use rfd::FileDialog;
 
@@ -452,57 +463,53 @@ impl eframe::App for CrackLeafApp {
         egui::CentralPanel::default()
             .frame(Frame::none().fill(Color32::from_rgb(0xFC, 0xF5, 0xEA)))
             .show(ctx, |ui| {
-            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                 ui.vertical_centered(|ui| {
-                let logo_size = (WINDOW_WIDTH * 0.5).clamp(60.0, 240.0);
-                let image = egui::Image::new(self.current_texture())
-                    .fit_to_exact_size(Vec2::splat(logo_size));
-                let response = ui.add(egui::ImageButton::new(image).frame(false));
+                    let logo_size = (WINDOW_WIDTH * 0.5).clamp(60.0, 240.0);
+                    let image = egui::Image::new(self.current_texture())
+                        .fit_to_exact_size(Vec2::splat(logo_size));
+                    let response = ui.add(egui::ImageButton::new(image).frame(false));
 
-                if !self.unlock_in_progress && !self.file_entries.is_empty() {
-                    if response.hovered() {
-                        self.set_mode(AnimationMode::Logo);
-                    } else if self.animation.mode != AnimationMode::HappyLoop {
-                        self.start_happy_loop();
-                    }
-                }
-
-                if response.clicked() {
-                    if self.file_entries.is_empty() {
-                        if let Some(paths) = FileDialog::new().add_filter("PDF", &["pdf"]).pick_files() {
-                            self.add_files(paths);
-                            if !self.file_entries.is_empty() {
-                                self.start_happy_loop();
-                                self.update_window_size(ctx);
-                            }
+                    if !self.unlock_in_progress && !self.file_entries.is_empty() {
+                        if response.hovered() {
+                            self.set_mode(AnimationMode::Logo);
+                        } else if self.animation.mode != AnimationMode::HappyLoop {
+                            self.start_happy_loop();
                         }
+                    }
+
+                    if response.clicked() {
+                        if self.file_entries.is_empty() {
+                            if let Some(paths) = FileDialog::new().add_filter("PDF", &["pdf"]).pick_files() {
+                                self.add_files(paths);
+                                if !self.file_entries.is_empty() {
+                                    self.start_happy_loop();
+                                    self.update_window_size(ctx);
+                                }
+                            }
+                        } else {
+                            if !self.qpdf_ok {
+                                if let Some(msg) = &self.qpdf_error {
+                                    self.result_text = msg.clone();
+                                }
+                                return;
+                            }
+                            self.start_unlock();
+                        }
+                    }
+
+                    let hint = if self.file_entries.is_empty() {
+                        "点击或者拖入文件".to_string()
+                    } else if self.file_entries.len() == 1 {
+                        let entry = &self.file_entries[0];
+                        format!(
+                            "{} {}",
+                            entry.icon,
+                            entry.path.file_name().unwrap_or_default().to_string_lossy()
+                        )
                     } else {
-                        if !self.qpdf_ok {
-                            if let Some(msg) = &self.qpdf_error {
-                                self.result_text = msg.clone();
-                            }
-                            return;
-                        }
-                        self.start_unlock();
-                    }
-                }
-
-                let hint = if self.file_entries.is_empty() {
-                    "点击或者拖入文件".to_string()
-                } else if self.file_entries.len() == 1 {
-                    let entry = &self.file_entries[0];
-                    format!(
-                        "{} {}",
-                        entry.icon,
-                        entry.path.file_name().unwrap_or_default().to_string_lossy()
-                    )
-                } else {
-                    format!("已导入 {} 个文件", self.file_entries.len())
-                };
-                ui.allocate_ui_with_layout(
-                    Vec2::new(ui.available_width(), 0.0),
-                    egui::Layout::left_to_right(egui::Align::Center).with_main_justify(true),
-                    |ui| {
+                        format!("已导入 {} 个文件", self.file_entries.len())
+                    };
+                    ui.horizontal_centered(|ui| {
                         ui.label(hint);
                         if self.file_entries.len() == 1 {
                             let entry = &self.file_entries[0];
@@ -515,8 +522,8 @@ impl eframe::App for CrackLeafApp {
                                 }
                             }
                         }
-                    },
-                );
+                    });
+                });
 
                 if self.file_entries.len() > 1 {
                     let _max_list_height = if self.file_entries.len() >= LIST_GROW_START {
@@ -525,71 +532,84 @@ impl eframe::App for CrackLeafApp {
                         (self.file_entries.len().saturating_sub(1) as f32) * 40.0
                     };
 
-                    let list_width = WINDOW_WIDTH - 40.0;
+                    let list_width = (ui.available_width() - 20.0).max(200.0);
                     let available_height = (ui.available_height() - 40.0).max(60.0);
-                    ui.allocate_ui_with_layout(
-                        Vec2::new(list_width, available_height),
-                        egui::Layout::top_down(egui::Align::Min),
-                        |ui| {
-                            ui.spacing_mut().item_spacing = Vec2::new(0.0, 8.0);
-                            egui::ScrollArea::vertical()
-                                .max_height(available_height)
-                                .show(ui, |ui| {
-                                    for entry in &self.file_entries {
-                                        let filename = entry
-                                            .path
-                                            .file_name()
-                                            .unwrap_or_default()
-                                            .to_string_lossy();
-                                        let icon = entry.icon.clone();
-                                        ui.allocate_ui_with_layout(
-                                            Vec2::new(list_width, 0.0),
-                                            egui::Layout::left_to_right(egui::Align::Center),
-                                            |ui| {
-                                                ui.spacing_mut().item_spacing = Vec2::new(6.0, 4.0);
-                                                ui.add_sized(Vec2::new(24.0, 24.0), egui::Label::new(icon));
-                                                let can_open = entry.output_path.is_some();
-                                                let button_width = if can_open { 28.0 } else { 0.0 };
-                                                let text_width =
-                                                    (ui.available_width() - button_width).max(80.0);
-                                                let label = egui::Label::new(filename).wrap();
-                                                let label_response = ui
-                                                    .add_sized(Vec2::new(text_width, 0.0), label)
-                                                    .interact(egui::Sense::click());
-
-                                                if can_open {
-                                                    if ui
+                    ui.horizontal_centered(|ui| {
+                        ui.allocate_ui_with_layout(
+                            Vec2::new(list_width, available_height),
+                            egui::Layout::top_down(egui::Align::Min),
+                            |ui| {
+                                ui.spacing_mut().item_spacing = Vec2::new(0.0, 8.0);
+                                egui::ScrollArea::vertical()
+                                    .max_height(available_height)
+                                    .show(ui, |ui| {
+                                        for entry in &self.file_entries {
+                                            let filename = entry
+                                                .path
+                                                .file_name()
+                                                .unwrap_or_default()
+                                                .to_string_lossy();
+                                            let icon = entry.icon.clone();
+                                            ui.allocate_ui_with_layout(
+                                                Vec2::new(list_width, 0.0),
+                                                egui::Layout::left_to_right(egui::Align::Center),
+                                                |ui| {
+                                                    ui.spacing_mut().item_spacing =
+                                                        Vec2::new(6.0, 4.0);
+                                                    ui.add_sized(
+                                                        Vec2::new(24.0, 24.0),
+                                                        egui::Label::new(icon),
+                                                    );
+                                                    let can_open = entry.output_path.is_some();
+                                                    let button_width = if can_open { 28.0 } else { 0.0 };
+                                                    let text_width =
+                                                        (ui.available_width() - button_width).max(80.0);
+                                                    let label_response = ui
                                                         .add_sized(
-                                                            Vec2::new(28.0, 24.0),
-                                                            egui::Button::new("开"),
+                                                            Vec2::new(text_width, 0.0),
+                                                            wrapped_filename_label(
+                                                                filename.as_ref(),
+                                                                text_width,
+                                                                ui,
+                                                            ),
                                                         )
-                                                        .clicked()
-                                                    {
+                                                        .interact(egui::Sense::click());
+
+                                                    if can_open {
+                                                        if ui
+                                                            .add_sized(
+                                                                Vec2::new(28.0, 24.0),
+                                                                egui::Button::new("开"),
+                                                            )
+                                                            .clicked()
+                                                        {
+                                                            open_entry(entry);
+                                                        }
+                                                    }
+
+                                                    if label_response.double_clicked() {
                                                         open_entry(entry);
                                                     }
-                                                }
-
-                                                if label_response.double_clicked() {
-                                                    open_entry(entry);
-                                                }
-                                            },
-                                        );
-                                    }
-                                });
-                        },
-                    );
+                                                },
+                                            );
+                                        }
+                                    });
+                            },
+                        );
+                    });
                 }
 
                 if !self.qpdf_ok {
                     if let Some(msg) = &self.qpdf_error {
-                        ui.label(msg);
+                        ui.vertical_centered(|ui| {
+                            ui.label(msg);
+                        });
                     }
-                } else {
-                    if let Some(msg) = &self.qpdf_warning {
+                } else if let Some(msg) = &self.qpdf_warning {
+                    ui.vertical_centered(|ui| {
                         ui.label(msg);
-                    }
+                    });
                 }
-                });
 
                 if !self.result_text.is_empty() {
                     let offset = (ui.available_height() - 36.0).max(0.0);
@@ -599,7 +619,6 @@ impl eframe::App for CrackLeafApp {
                     });
                 }
             });
-        });
 
         if !self.qpdf_ok && !self.qpdf_prompted {
             self.qpdf_prompted = true;
@@ -646,6 +665,14 @@ fn load_window_icon(assets_dir: &Path) -> IconData {
         width,
         height,
     }
+}
+
+fn wrapped_filename_label(text: &str, max_width: f32, ui: &egui::Ui) -> Label {
+    let font_id = TextStyle::Body.resolve(ui.style());
+    let text_color = ui.style().visuals.text_color();
+    let mut job = LayoutJob::simple(text.to_string(), font_id, text_color, max_width);
+    job.wrap.break_anywhere = true;
+    Label::new(job)
 }
 
 fn load_frames(ctx: &egui::Context, assets_dir: &Path) -> HashMap<&'static str, Vec<TextureHandle>> {
