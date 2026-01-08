@@ -1,3 +1,5 @@
+#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -929,4 +931,3 @@ fn main() -> eframe::Result<()> {
         Box::new(|cc| Ok(Box::new(CrackLeafApp::new(cc)))),
     )
 }
-#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
