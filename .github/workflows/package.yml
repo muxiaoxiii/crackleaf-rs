@@ -42,23 +42,23 @@ jobs:
       - name: Assemble dist
         shell: pwsh
         run: |
-          $dist = \"dist-${{ matrix.arch }}\"
+          $dist = "dist-${{ matrix.arch }}"
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
-          Copy-Item \"target/${{ matrix.target }}/release/crackleaf-rs.exe\" \"$dist/CrackLeaf.exe\"
-          $qpdf = Get-ChildItem \"$GITHUB_WORKSPACE/tools\" -Filter qpdf.exe | Select-Object -First 1
-          if ($null -eq $qpdf) { throw \"qpdf.exe not found\" }
-          Copy-Item $qpdf.FullName \"$dist/qpdf.exe\"
-          Copy-Item \"assets\" \"$dist/assets\" -Recurse
-          if (Test-Path \"tools\") {
-            Get-ChildItem \"tools\" -Filter \"*.dll\" | ForEach-Object { Copy-Item $_.FullName \"$dist/\" }
+          Copy-Item "target/${{ matrix.target }}/release/crackleaf-rs.exe" "$dist/CrackLeaf.exe"
+          $qpdf = Get-ChildItem "$env:GITHUB_WORKSPACE/tools" -Filter qpdf.exe | Select-Object -First 1
+          if ($null -eq $qpdf) { throw "qpdf.exe not found" }
+          Copy-Item $qpdf.FullName "$dist/qpdf.exe"
+          Copy-Item "assets" "$dist/assets" -Recurse
+          if (Test-Path "tools") {
+            Get-ChildItem "tools" -Filter "*.dll" | ForEach-Object { Copy-Item $_.FullName "$dist/" }
           }
       - name: Zip
         shell: pwsh
         run: |
-          $zip = \"CrackLeaf-win-${{ matrix.arch }}.zip\"
+          $zip = "CrackLeaf-win-${{ matrix.arch }}.zip"
           if (Test-Path $zip) { Remove-Item $zip }
-          Push-Location \"dist-${{ matrix.arch }}\"
-          Compress-Archive -Path * -DestinationPath \"../$zip\"
+          Push-Location "dist-${{ matrix.arch }}"
+          Compress-Archive -Path * -DestinationPath "../$zip"
           Pop-Location
       - uses: actions/upload-artifact@v4
         with:
