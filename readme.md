@@ -1,174 +1,50 @@
-# crackleaf 开发文档
+# crackleaf-rs
 
-项目地址：[https://github.com/muxiaoxiii/crackleaf](https://github.com/muxiaoxiii/crackleaf)
+Rust + egui version of CrackLeaf using `qpdf` for unlock operations.
 
----
+## Requirements
 
-## 1. 项目简介
+- Rust toolchain (stable)
+- `qpdf` available at build time (the build copies it next to the binary)
+  - macOS: `brew install qpdf`
+  - Windows: install qpdf and add to PATH, or set `QPDF_PATH`
 
-crackleaf 是一款基于 Python 的极致精简 PDF 编辑限制解除工具。核心解锁逻辑独立封装，前端 UI 采用 Tkinter 实现，整体打包为单文件应用（Nuitka），体积极小，启动迅速，适合日常快速解锁 PDF 文件使用。
+## Run
 
----
-
-## 2. 项目结构
-
-```
-crackleaf/
-│
-├── pdf_unlocker.py         # 解锁核心逻辑（PikePDF/PyPDF2）
-├── main.py                 # Tkinter UI 主程序
-├── assets/                 # 图标、UI资源
-├── requirements.txt        # 依赖库列表
-├── .pre-commit-config.yaml # pre-commit hook 配置
-├── pyproject.toml          # 项目配置，含 commitizen 信息
-├── CHANGELOG.md            # 自动生成的更新日志
-└── README.md               # 项目说明
-```
-
----
-
-## 3. 依赖环境
-
-- Python 3.8+
-- pikepdf
-- PyPDF2
-- tkinter（Python 标准库自带）
-- nuitka（用于打包）
-- commitizen（版本管理与 changelog 自动生成）
-- pre-commit（提交信息校验）
-- 其他依赖见 requirements.txt
-
----
-
-## 4. 软件核心逻辑
-
-### 4.1 启动与主界面
-
-- 程序启动，创建固定尺寸的乳白色主窗口，**建议初始窗口尺寸为 320×400 或 360×420**，保证紧凑美观。
-- 界面中央显示主图标，上方为说明文字“解除PDF编辑限制”，下方为软件名及“拖拽文件或者点击导入PDF文件”提示。
-- 全窗口绑定点击和拖拽事件。
-
-### 4.2 文件导入与校验
-
-- 支持拖拽或点击窗口导入单个或多个 PDF 文件。
-- 校验文件类型，非 PDF 文件弹窗提示“只能处理pdf文件”，不加入处理列表。
-- 合法 PDF 文件加入待处理队列。
-
-### 4.3 UI 尺寸与布局自适应
-
-- **单文件模式**：中央仅显示大 PDF 图标，下方为文件名（未导入时显示“未选择文件”），整体布局简洁。
-- **多文件模式**：导入多个文件后，主界面下方出现文件列表，每个文件一行，显示文件名和对应锁图标。
-- **自适应长度**：文件列表区纵向增长，界面高度随文件数增加而变长，直到窗口高度达到宽度的 2 倍（如 320×640 或 360×720）。
-- **滚动条出现**：当文件列表高度超过 2 倍宽度时，界面不再变大，列表区出现垂直滚动条，方便浏览所有文件。
-- **文件操作**：每行文件均有独立锁图标，可单独处理。顶部可有批量处理按钮（小锁图标）。
-- **整体风格**：窗口始终保持紧凑，避免出现“巨型空白”或冗余空间。
-
-### 4.4 文件批量处理与状态显示
-
-- 多文件时，主界面中央出现文件列表区域，展示所有导入文件（文件名 + 锁状态图标）。
-- 列表最多显示 5-8 个，超出可滚动查看，窗口尺寸不变。
-- 主界面顶部显示较小的全局处理按钮锁图标（未处理时为锁，点击后开始批量处理，处理完成后变为打开的锁）。
-- 列表中每个文件后方有独立的锁状态图标（🔒/🔓），指示该文件的处理状态，并可单独点击处理某个文件。
-- 支持批量操作（点击顶部锁按钮处理全部），也支持单独处理某个文件（点击列表后锁图标）。
-- 状态与提示实时更新，处理进度和结果一目了然。
-
-### 4.5 限制类型检测与处理
-
-- 对每个文件，调用 `pdf_unlocker.py` 检测限制类型：
-  - **查看限制**：弹窗输入密码，校验，三次错误停止处理。
-  - **编辑限制**：显示锁图标，点击后调用解锁逻辑，成功后变为解锁状态。
-  - **无限制**：直接显示已解锁，提示“文档没有限制”。
-
-### 4.6 解锁处理
-
-- 优先使用 PikePDF 进行高保真解锁，失败则自动切换 PyPDF2 备用方式。
-- 解锁成功后，自动保存新文件（加 `_unlocked` 后缀），原文件不变。
-- 解锁失败或密码错误，状态栏和弹窗给出明确提示。
-- 支持批量“全部尝试解锁”操作，也可逐个解锁。
-
-### 4.7 UI 交互细节
-
-- 拖拽/点击时，图标高亮，窗口变暗，增强交互感。
-- 错误/状态提示用弹窗（messagebox）或状态栏。
-- 支持键盘 Tab/Enter 快捷操作。
-- 所有操作均在本地完成，临时文件自动清理。
-
----
-
-## 5. 主要模块说明
-
-### 5.1 pdf_unlocker.py
-
-- 提供统一接口 `unlock_pdf(input_path, output_path, password='')`
-- 支持两种解锁策略（PikePDF、PyPDF2），自动切换
-- 返回详细的解锁结果（成功/失败/原因/输出路径）
-
-### 5.2 main.py
-
-- 初始化 Tkinter 主窗口
-- 负责文件选择/拖拽、文件列表、状态栏、密码输入弹窗、锁图标等 UI 元素
-- 管理文件队列与每个文件的解锁状态
-- 调用 `pdf_unlocker.py` 进行实际解锁操作
-- 处理用户交互和状态反馈
-
-### 5.3 assets/
-
-- 存放 PDF 图标、锁/解锁状态图标等 UI 资源
-
----
-
-## 6. 打包与分发
-
-- 使用 Nuitka 打包为单一可执行文件：
-  ```
-  nuitka --onefile --standalone main.py
-  ```
-- 确保所有依赖库打包进可执行文件
-- 支持 Windows/macOS/Linux 跨平台分发
-
----
-
-## 7. 扩展与维护建议
-
-- 代码模块化，便于后续维护和功能扩展
-- 增加多语言支持、日志导出、用户自定义输出目录等功能
-- 保持详细注释和文档同步更新
-- 定期跨平台测试，保证兼容性
-
----
-
-## 8. 典型用户流程
-
-1. 用户双击运行 crackleaf，主界面打开
-2. 拖拽或点击导入一个或多个 PDF 文件
-3. 软件自动检测文件类型和限制类型，更新文件列表状态
-4. 对于需密码的文件，弹窗输入密码，三次错误则停止
-5. 多文件时，用户可点击顶部统一处理按钮，也可单独点击文件列表后锁图标处理某个文件
-6. 解锁完成后自动保存新文件并提示用户
-7. 所有操作均可在主界面文件列表中查看进度与结果
-
----
-
-项目地址：[https://github.com/muxiaoxiii/crackleaf](https://github.com/muxiaoxiii/crackleaf)
-
----
-
-## 9. 版本控制与变更日志自动化
-
-本项目采用 [Commitizen](https://commitizen-tools.github.io/commitizen/) 管理版本号和更新日志，规范提交格式，确保可维护性。
-
-- 使用 `cz commit` 代替 `git commit`，引导规范提交
-- 使用 `cz bump` 自动判断版本升级类型，并更新版本号与 `CHANGELOG.md`
-- 所有提交信息遵循 Conventional Commit 格式（如 `feat`, `fix`, `chore` 等）
-- 提交前自动检查格式（使用 `pre-commit` 安装 hook）
-
-如需生成或查看更新日志，请执行：
+From project root:
 
 ```bash
-cz changelog
+cargo run
 ```
-或直接版本升级：
+
+## Build (release)
 
 ```bash
-cz bump
+cargo build --release
 ```
+
+The binary will be at `target/release/crackleaf-rs`.
+
+## Packaging
+
+### macOS (.app)
+
+Requires `cargo-bundle`:
+
+```bash
+cargo install cargo-bundle
+cargo bundle --release
+```
+
+The app will be at `target/release/bundle/osx/CrackLeaf.app`.
+If qpdf is not installed, the app will prompt to install it via Homebrew.
+
+### Windows (zip)
+
+Use the GitHub Actions workflow `package` to build:
+
+- `CrackLeaf-win-x86.zip`
+- `CrackLeaf-win-x64.zip`
+- `CrackLeaf-win-universal.zip` (contains both x86/x64)
+
+The workflow builds qpdf from source and bundles the resulting `qpdf.exe`.
