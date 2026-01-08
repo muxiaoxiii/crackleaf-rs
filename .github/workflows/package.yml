@@ -133,7 +133,7 @@ jobs:
           cmake --install qpdf-build
           cp "qpdf-install/bin/qpdf" "$APP_PATH/Contents/MacOS/qpdf"
           chmod +x "$APP_PATH/Contents/MacOS/qpdf"
-          bundle_deps() {
+          bundle_deps_recursive() {
             local target="$1"
             local app_dir="$2"
             local deps
@@ -141,19 +141,17 @@ jobs:
             for dep in $deps; do
               local name
               name=$(basename "$dep")
-              if [ ! -f "$app_dir/$name" ]; then
-                cp "$dep" "$app_dir/$name"
-                chmod 644 "$app_dir/$name"
-              fi
+              local copied="$app_dir/$name"
               install_name_tool -change "$dep" "@executable_path/$name" "$target"
+              if [ ! -f "$copied" ]; then
+                cp "$dep" "$copied"
+                chmod 644 "$copied"
+                install_name_tool -id "@executable_path/$name" "$copied"
+                bundle_deps_recursive "$copied" "$app_dir"
+              fi
             done
           }
-          bundle_deps "$APP_PATH/Contents/MacOS/qpdf" "$APP_PATH/Contents/MacOS"
-          for lib in "$APP_PATH/Contents/MacOS"/*.dylib; do
-            [ -e "$lib" ] || continue
-            bundle_deps "$lib" "$APP_PATH/Contents/MacOS"
-            install_name_tool -id "@executable_path/$(basename "$lib")" "$lib"
-          done
+          bundle_deps_recursive "$APP_PATH/Contents/MacOS/qpdf" "$APP_PATH/Contents/MacOS"
       - name: Create dmg (drag to Applications)
         run: |
           if [ -n "${{ matrix.target }}" ]; then
