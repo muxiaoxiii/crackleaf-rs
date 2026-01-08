@@ -718,6 +718,14 @@ fn detect_encrypted(path: &Path) -> Option<bool> {
 
 fn run_unlock(files: Vec<FileEntry>, tx: Sender<UnlockMessage>) {
     for (index, entry) in files.into_iter().enumerate() {
+        if let Some(false) = detect_encrypted(&entry.path) {
+            let _ = tx.send(UnlockMessage::FileResult {
+                index,
+                success: true,
+                output_path: None,
+            });
+            continue;
+        }
         match unlock_pdf(&entry.path) {
             Ok(output_path) => {
                 let success = output_path.is_some();
