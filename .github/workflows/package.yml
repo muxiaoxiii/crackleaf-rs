@@ -20,18 +20,23 @@ jobs:
             target: i686-pc-windows-msvc
     env:
       QPDF_VERSION: "12.2.0"
-      HTTP_PROXY: ""
-      HTTPS_PROXY: ""
+      VCPKG_BASELINE: "01f602195983451bc83e72f4214af2cbc495aa94"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - uses: lukka/run-vcpkg@v11
+      - name: Install vcpkg
+        shell: pwsh
+        run: |
+          git clone https://github.com/microsoft/vcpkg.git vcpkg
+          git -C vcpkg checkout ${{ env.VCPKG_BASELINE }}
+          Invoke-WebRequest https://github.com/microsoft/vcpkg-tool/releases/download/2024-04-23/vcpkg.exe -OutFile vcpkg/vcpkg.exe
+          "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Install qpdf deps (vcpkg)
         shell: pwsh
         run: |
-          vcpkg install zlib libjpeg-turbo openssl --triplet ${{ matrix.triplet }}
+          & "$env:VCPKG_ROOT\vcpkg.exe" install zlib libjpeg-turbo openssl --triplet ${{ matrix.triplet }}
       - name: Build qpdf from source
         shell: pwsh
         run: |
