@@ -155,7 +155,7 @@ impl CrackLeafApp {
         self.animation.loops_left = 1;
     }
 
-    fn draw_file_row(&self, ui: &mut egui::Ui, entry: &FileEntry) {
+    fn draw_file_row(&self, ui: &mut egui::Ui, entry: &FileEntry, row_width: f32) {
         let filename = entry
             .path
             .file_name()
@@ -163,29 +163,39 @@ impl CrackLeafApp {
             .to_string_lossy();
 
         let icon_width = 24.0;
+        let status_width = 80.0;
         let button_width = 40.0;
         let spacing = 8.0;
-        let total_width = ui.available_width();
-        let text_width = (total_width - icon_width - button_width - (spacing * 3.0)).max(80.0);
+        let text_width = (row_width - icon_width - status_width - button_width - (spacing * 4.0))
+            .max(120.0);
 
-        ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing = Vec2::new(spacing, 4.0);
-            ui.add_sized(Vec2::new(icon_width, 24.0), egui::Label::new(&entry.icon));
-            ui.add_space(spacing);
-            ui.add_sized(Vec2::new(text_width, 0.0), egui::Label::new(filename).wrap());
-            ui.add_space(spacing);
+        ui.allocate_ui_with_layout(
+            Vec2::new(row_width, 0.0),
+            egui::Layout::left_to_right(egui::Align::Center),
+            |ui| {
+                ui.spacing_mut().item_spacing = Vec2::new(spacing, 4.0);
+                ui.add_sized(Vec2::new(icon_width, 24.0), egui::Label::new(&entry.icon));
+                ui.add_space(spacing);
+                ui.add_sized(Vec2::new(text_width, 0.0), egui::Label::new(filename).wrap());
+                ui.add_space(spacing);
+                ui.add_sized(
+                    Vec2::new(status_width, 24.0),
+                    egui::Label::new(&entry.status).truncate(),
+                );
+                ui.add_space(spacing);
 
-            if entry.output_path.is_some() {
-                if ui
-                    .add_sized(Vec2::new(button_width, 24.0), egui::Button::new("开"))
-                    .clicked()
-                {
-                    open_entry(entry);
+                if entry.output_path.is_some() {
+                    if ui
+                        .add_sized(Vec2::new(button_width, 24.0), egui::Button::new("开"))
+                        .clicked()
+                    {
+                        open_entry(entry);
+                    }
+                } else {
+                    ui.allocate_space(Vec2::new(button_width, 24.0));
                 }
-            } else {
-                ui.allocate_space(Vec2::new(button_width, 24.0));
-            }
-        });
+            },
+        );
     }
 
     fn tick_animation(&mut self, ctx: &egui::Context) {
@@ -544,13 +554,14 @@ impl eframe::App for CrackLeafApp {
                         ui.add_space(10.0);
 
                         if !self.file_entries.is_empty() {
+                            let row_width = (ui.available_width() - 20.0).max(240.0);
                             let scroll_height = ui.available_height();
                             egui::ScrollArea::vertical()
                                 .max_height(scroll_height)
                                 .show(ui, |ui| {
                                     ui.spacing_mut().item_spacing = Vec2::new(0.0, 12.0);
                                     for entry in &self.file_entries {
-                                        self.draw_file_row(ui, entry);
+                                        self.draw_file_row(ui, entry, row_width);
                                     }
                                 });
                         }
