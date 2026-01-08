@@ -1,3 +1,8 @@
+use std::path::Path;
+
+use ico::{IconDir, IconImage};
+use image::imageops::FilterType;
+
 fn main() {
     if std::env::var("CARGO_CFG_TARGET_OS").unwrap_or_default() != "windows" {
         return;
@@ -5,9 +10,7 @@ fn main() {
 
     use std::env;
     use std::fs;
-    use std::path::{Path, PathBuf};
-    use image::imageops::FilterType;
-    use ico::{IconDir, IconImage};
+    use std::path::PathBuf;
     use winres::WindowsResource;
 
     println!("cargo:rerun-if-env-changed=QPDF_PATH");
