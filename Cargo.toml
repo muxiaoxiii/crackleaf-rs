@@ -1,7 +1,8 @@
 [package]
 name = "crackleaf-rs"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2021"
+authors = ["muxiaoxi"]
 build = "build.rs"
 
 [dependencies]
@@ -17,6 +18,8 @@ name = "CrackLeaf"
 identifier = "com.crackleaf.app"
 category = "public.app-category.productivity"
 resources = ["assets"]
+short_description = "CrackLeaf"
+long_description = "CrackLeaf PDF unlocker"
 
 [build-dependencies]
 image = "0.25.5"
