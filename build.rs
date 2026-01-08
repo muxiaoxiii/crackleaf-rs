@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use ico::{IconDir, IconImage};
+use ico::{IconDir, IconDirEntry, IconImage};
 use image::imageops::FilterType;
 
 fn main() {
@@ -80,7 +80,8 @@ fn build_icon(png_path: &Path, ico_path: &Path) -> std::io::Result<()> {
     let rgba = resized.to_rgba8();
     let icon_image = IconImage::from_rgba_data(256, 256, rgba.into_raw());
     let mut icon_dir = IconDir::new(ico::ResourceType::Icon);
-    icon_dir.add_entry(icon_image);
+    let icon_entry = IconDirEntry::encode(&icon_image)?;
+    icon_dir.add_entry(icon_entry);
     let file = std::fs::File::create(ico_path)?;
     icon_dir.write(file)?;
     Ok(())
