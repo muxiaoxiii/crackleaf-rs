@@ -1,0 +1,54 @@
+name: package
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-x64:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build release
+        working-directory: crackleaf-rs
+        run: cargo build --release
+      - name: Assemble dist
+        working-directory: crackleaf-rs
+        shell: pwsh
+        run: |
+          $dist = "dist"
+          New-Item -ItemType Directory -Force -Path $dist | Out-Null
+          Copy-Item "target/release/crackleaf-rs.exe" "$dist/CrackLeaf.exe"
+          Copy-Item "tools/qpdf.exe" "$dist/" -ErrorAction Stop
+          Get-ChildItem "tools" -Filter "*.dll" | ForEach-Object { Copy-Item $_.FullName "$dist/" }
+          Copy-Item "assets" "$dist/assets" -Recurse
+      - name: Zip
+        working-directory: crackleaf-rs
+        shell: pwsh
+        run: |
+          if (Test-Path "CrackLeaf-win-x64.zip") { Remove-Item "CrackLeaf-win-x64.zip" }
+          Compress-Archive -Path "dist/*" -DestinationPath "CrackLeaf-win-x64.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-win-x64
+          path: crackleaf-rs/CrackLeaf-win-x64.zip
+
+  macos-app:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install cargo-bundle
+        run: cargo install cargo-bundle
+      - name: Build app bundle
+        working-directory: crackleaf-rs
+        run: cargo bundle --release
+      - name: Zip app
+        working-directory: crackleaf-rs
+        run: |
+          APP_PATH="target/release/bundle/osx/CrackLeaf.app"
+          zip -r CrackLeaf-mac.app.zip "$APP_PATH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-mac
+          path: crackleaf-rs/CrackLeaf-mac.app.zip
