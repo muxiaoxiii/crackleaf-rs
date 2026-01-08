@@ -1,4 +1,4 @@
-#![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
+#![cfg_attr(all(target_os = "windows", not(debug_assertions)), windows_subsystem = "windows")]
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -7,7 +7,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::{Duration, Instant};
 
 use anyhow::Result;
-use eframe::egui::{self, Color32, ColorImage, Frame, TextureHandle, Vec2};
+use eframe::egui::{self, Color32, ColorImage, Frame, IconData, TextureHandle, Vec2};
+use image::GenericImageView;
 use rfd::FileDialog;
 
 #[cfg(target_os = "windows")]
@@ -487,7 +488,7 @@ impl eframe::App for CrackLeafApp {
                 });
 
                 if self.file_entries.len() > 1 {
-                    let max_list_height = if self.file_entries.len() >= LIST_GROW_START {
+                    let _max_list_height = if self.file_entries.len() >= LIST_GROW_START {
                         WINDOW_HEIGHT_MAX - WINDOW_HEIGHT_BASE
                     } else {
                         (self.file_entries.len().saturating_sub(1) as f32) * 40.0
@@ -594,6 +595,24 @@ fn resolve_assets_dir() -> PathBuf {
         }
     }
     PathBuf::from("assets")
+}
+
+fn load_window_icon(assets_dir: &Path) -> IconData {
+    let icon_path = assets_dir.join("crackleaf.png");
+    let image = match image::open(&icon_path) {
+        Ok(image) => image,
+        Err(err) => {
+            eprintln!("Failed to load window icon {:?}: {err}", icon_path);
+            return IconData::default();
+        }
+    };
+    let rgba = image.to_rgba8();
+    let (width, height) = image.dimensions();
+    IconData {
+        rgba: rgba.into_raw(),
+        width,
+        height,
+    }
 }
 
 fn load_frames(ctx: &egui::Context, assets_dir: &Path) -> HashMap<&'static str, Vec<TextureHandle>> {
@@ -918,10 +937,13 @@ fn qpdf_filename() -> &'static str {
 }
 
 fn main() -> eframe::Result<()> {
+    let assets_dir = resolve_assets_dir();
+    let icon_data = load_window_icon(&assets_dir);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size(Vec2::new(WINDOW_WIDTH, WINDOW_HEIGHT_BASE))
-            .with_resizable(false),
+            .with_resizable(false)
+            .with_icon(icon_data),
         ..Default::default()
     };
 

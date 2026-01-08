@@ -19,11 +19,11 @@ fn main() {
     let tool_path = manifest_dir.join("tools").join("qpdf.exe");
 
     let qpdf_path = match env::var("QPDF_PATH").ok().filter(|s| !s.is_empty()) {
-        Some(path) => PathBuf::from(path),
-        None if tool_path.exists() => tool_path,
+        Some(path) => Some(PathBuf::from(path)),
+        None if tool_path.exists() => Some(tool_path),
         None => {
             println!("cargo:warning=Windows build: qpdf.exe not found in tools/");
-            return;
+            None
         }
     };
 
@@ -34,20 +34,22 @@ fn main() {
         .map(Path::to_path_buf)
         .unwrap_or_else(|| out_dir.clone());
 
-    let dest_path = target_dir.join("qpdf.exe");
-    if let Err(err) = fs::copy(&qpdf_path, &dest_path) {
-        println!("cargo:warning=Failed to copy qpdf.exe: {err}");
-    }
+    if let Some(qpdf_path) = qpdf_path.as_ref() {
+        let dest_path = target_dir.join("qpdf.exe");
+        if let Err(err) = fs::copy(qpdf_path, &dest_path) {
+            println!("cargo:warning=Failed to copy qpdf.exe: {err}");
+        }
 
-    if let Some(parent) = qpdf_path.parent() {
-        if let Ok(entries) = fs::read_dir(parent) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if let Some(ext) = path.extension() {
-                    if ext.eq_ignore_ascii_case("dll") {
-                        if let Some(file_name) = path.file_name() {
-                            let dest_dll = target_dir.join(file_name);
-                            let _ = fs::copy(&path, &dest_dll);
+        if let Some(parent) = qpdf_path.parent() {
+            if let Ok(entries) = fs::read_dir(parent) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if let Some(ext) = path.extension() {
+                        if ext.eq_ignore_ascii_case("dll") {
+                            if let Some(file_name) = path.file_name() {
+                                let dest_dll = target_dir.join(file_name);
+                                let _ = fs::copy(&path, &dest_dll);
+                            }
                         }
                     }
                 }
