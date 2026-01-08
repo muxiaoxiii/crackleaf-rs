@@ -117,13 +117,13 @@ jobs:
           cp -R assets/* "$X86_APP/Contents/Resources/assets/"
       - name: Create universal app
         run: |
-          ARM_APP=\"target/release/bundle/osx/CrackLeaf.app\"
-          X86_APP=\"target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app\"
-          UNIVERSAL_APP=\"target/universal/CrackLeaf.app\"
-          rm -rf \"$UNIVERSAL_APP\"
-          mkdir -p \"target/universal\"
-          cp -R \"$ARM_APP\" \"$UNIVERSAL_APP\"
-          lipo -create \"$ARM_APP/Contents/MacOS/CrackLeaf\" \"$X86_APP/Contents/MacOS/CrackLeaf\" -output \"$UNIVERSAL_APP/Contents/MacOS/CrackLeaf\"
+          ARM_APP="target/release/bundle/osx/CrackLeaf.app"
+          X86_APP="target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app"
+          UNIVERSAL_APP="target/universal/CrackLeaf.app"
+          rm -rf "$UNIVERSAL_APP"
+          mkdir -p "target/universal"
+          cp -R "$ARM_APP" "$UNIVERSAL_APP"
+          lipo -create "$ARM_APP/Contents/MacOS/CrackLeaf" "$X86_APP/Contents/MacOS/CrackLeaf" -output "$UNIVERSAL_APP/Contents/MacOS/CrackLeaf"
       - name: Zip apps
         run: |
           zip -r CrackLeaf-mac-arm64.app.zip \"target/release/bundle/osx/CrackLeaf.app\"
@@ -133,15 +133,15 @@ jobs:
         run: |
           mkdir -p dist/dmg
           for APP in arm64 x86_64 universal; do
-            APP_PATH=\"target/release/bundle/osx/CrackLeaf.app\"
-            if [ \"$APP\" = \"x86_64\" ]; then APP_PATH=\"target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app\"; fi
-            if [ \"$APP\" = \"universal\" ]; then APP_PATH=\"target/universal/CrackLeaf.app\"; fi
-            STAGING=\"dist/dmg/CrackLeaf-$APP\"
-            rm -rf \"$STAGING\"
-            mkdir -p \"$STAGING\"
-            cp -R \"$APP_PATH\" \"$STAGING/\"
-            ln -s /Applications \"$STAGING/Applications\"
-            hdiutil create -volname \"CrackLeaf\" -srcfolder \"$STAGING\" -ov -format UDZO \"CrackLeaf-mac-$APP.dmg\"
+            APP_PATH="target/release/bundle/osx/CrackLeaf.app"
+            if [ "$APP" = "x86_64" ]; then APP_PATH="target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app"; fi
+            if [ "$APP" = "universal" ]; then APP_PATH="target/universal/CrackLeaf.app"; fi
+            STAGING="dist/dmg/CrackLeaf-$APP"
+            rm -rf "$STAGING"
+            mkdir -p "$STAGING"
+            cp -R "$APP_PATH" "$STAGING/"
+            ln -s /Applications "$STAGING/Applications"
+            hdiutil create -volname "CrackLeaf" -srcfolder "$STAGING" -ov -format UDZO "CrackLeaf-mac-$APP.dmg"
           done
       - uses: actions/upload-artifact@v4
         with:
