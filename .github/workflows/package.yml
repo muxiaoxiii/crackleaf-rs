@@ -13,46 +13,29 @@ jobs:
       matrix:
         include:
           - arch: x64
-            triplet: x64-windows-static
             target: x86_64-pc-windows-msvc
           - arch: x86
-            triplet: x86-windows-static
             target: i686-pc-windows-msvc
     env:
       QPDF_VERSION: "12.2.0"
-      VCPKG_BASELINE: "01f602195983451bc83e72f4214af2cbc495aa94"
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - name: Install vcpkg
-        shell: pwsh
-        run: |
-          git clone https://github.com/microsoft/vcpkg.git vcpkg
-          git -C vcpkg checkout ${{ env.VCPKG_BASELINE }}
-          Invoke-WebRequest https://github.com/microsoft/vcpkg-tool/releases/download/2024-04-23/vcpkg.exe -OutFile vcpkg/vcpkg.exe
-          "VCPKG_ROOT=$env:GITHUB_WORKSPACE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
-      - name: Install qpdf deps (vcpkg)
-        shell: pwsh
-        run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install zlib libjpeg-turbo openssl --triplet ${{ matrix.triplet }}
-      - name: Build qpdf from source
+      - name: Download qpdf (Windows)
         shell: pwsh
         run: |
           $ver = "${{ env.QPDF_VERSION }}"
-          $url = "https://github.com/qpdf/qpdf/releases/download/v$ver/qpdf-$ver.tar.gz"
-          Invoke-WebRequest $url -OutFile qpdf.tar.gz
-          tar -xf qpdf.tar.gz
-          $src = "qpdf-$ver"
-          cmake -S $src -B qpdf-build `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake" `
-            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} `
-            -DBUILD_SHARED_LIBS=OFF `
-            -DQPDF_BUILD_TESTS=OFF `
-            -DQPDF_BUILD_DOCS=OFF
-          cmake --build qpdf-build --config Release
+          $arch = "${{ matrix.arch }}"
+          $variant = if ($arch -eq "x64") { "msvc64" } else { "msvc32" }
+          $url = "https://github.com/qpdf/qpdf/releases/download/v$ver/qpdf-$ver-$variant.zip"
+          $zip = "qpdf.zip"
+          $dest = "qpdf-temp"
+          New-Item -ItemType Directory -Force -Path "tools" | Out-Null
+          Invoke-WebRequest $url -OutFile $zip
+          Expand-Archive -Path $zip -DestinationPath $dest
+          Copy-Item "$dest\\*\\bin\\*" "tools" -Recurse -Force
       - name: Build CrackLeaf
         shell: pwsh
         run: cargo build --release --target ${{ matrix.target }}
@@ -62,7 +45,7 @@ jobs:
           $dist = \"dist-${{ matrix.arch }}\"
           New-Item -ItemType Directory -Force -Path $dist | Out-Null
           Copy-Item \"target/${{ matrix.target }}/release/crackleaf-rs.exe\" \"$dist/CrackLeaf.exe\"
-          $qpdf = Get-ChildItem \"$GITHUB_WORKSPACE/qpdf-build\" -Recurse -Filter qpdf.exe | Select-Object -First 1
+          $qpdf = Get-ChildItem \"$GITHUB_WORKSPACE/tools\" -Filter qpdf.exe | Select-Object -First 1
           if ($null -eq $qpdf) { throw \"qpdf.exe not found\" }
           Copy-Item $qpdf.FullName \"$dist/qpdf.exe\"
           Copy-Item \"assets\" \"$dist/assets\" -Recurse
