@@ -469,7 +469,20 @@ impl eframe::App for CrackLeafApp {
                 } else {
                     format!("已导入 {} 个文件", self.file_entries.len())
                 };
-                ui.label(hint);
+                ui.horizontal(|ui| {
+                    ui.label(hint);
+                    if self.file_entries.len() == 1 {
+                        let entry = &self.file_entries[0];
+                        if entry.output_path.is_some() {
+                            if ui
+                                .add_sized(Vec2::new(24.0, 24.0), egui::Button::new("开"))
+                                .clicked()
+                            {
+                                open_entry(entry);
+                            }
+                        }
+                    }
+                });
 
                 if self.file_entries.len() > 1 {
                     let max_list_height = if self.file_entries.len() >= LIST_GROW_START {

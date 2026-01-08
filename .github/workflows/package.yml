@@ -64,7 +64,9 @@ jobs:
         run: |
           $zip = \"CrackLeaf-win-${{ matrix.arch }}.zip\"
           if (Test-Path $zip) { Remove-Item $zip }
-          Compress-Archive -Path \"dist-${{ matrix.arch }}/*\" -DestinationPath $zip
+          Push-Location \"dist-${{ matrix.arch }}\"
+          Compress-Archive -Path * -DestinationPath \"../$zip\"
+          Pop-Location
       - uses: actions/upload-artifact@v4
         with:
           name: CrackLeaf-win-${{ matrix.arch }}
@@ -89,7 +91,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist/universal | Out-Null
           Expand-Archive dist/x64/CrackLeaf-win-x64.zip -DestinationPath dist/universal/x64
           Expand-Archive dist/x86/CrackLeaf-win-x86.zip -DestinationPath dist/universal/x86
-          Compress-Archive -Path dist/universal/* -DestinationPath CrackLeaf-win-universal.zip
+          Push-Location dist/universal
+          Compress-Archive -Path * -DestinationPath \"../../CrackLeaf-win-universal.zip\"
+          Pop-Location
       - uses: actions/upload-artifact@v4
         with:
           name: CrackLeaf-win-universal
@@ -132,6 +136,20 @@ jobs:
           zip -r CrackLeaf-mac-arm64.app.zip \"target/release/bundle/osx/CrackLeaf.app\"
           zip -r CrackLeaf-mac-x86_64.app.zip \"target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app\"
           zip -r CrackLeaf-mac-universal.app.zip \"target/universal/CrackLeaf.app\"
+      - name: Create dmg (drag to Applications)
+        run: |
+          mkdir -p dist/dmg
+          for APP in arm64 x86_64 universal; do
+            APP_PATH=\"target/release/bundle/osx/CrackLeaf.app\"
+            if [ \"$APP\" = \"x86_64\" ]; then APP_PATH=\"target/x86_64-apple-darwin/release/bundle/osx/CrackLeaf.app\"; fi
+            if [ \"$APP\" = \"universal\" ]; then APP_PATH=\"target/universal/CrackLeaf.app\"; fi
+            STAGING=\"dist/dmg/CrackLeaf-$APP\"
+            rm -rf \"$STAGING\"
+            mkdir -p \"$STAGING\"
+            cp -R \"$APP_PATH\" \"$STAGING/\"
+            ln -s /Applications \"$STAGING/Applications\"
+            hdiutil create -volname \"CrackLeaf\" -srcfolder \"$STAGING\" -ov -format UDZO \"CrackLeaf-mac-$APP.dmg\"
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: CrackLeaf-mac-arm64
@@ -144,3 +162,15 @@ jobs:
         with:
           name: CrackLeaf-mac-universal
           path: CrackLeaf-mac-universal.app.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-mac-arm64-dmg
+          path: CrackLeaf-mac-arm64.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-mac-x86_64-dmg
+          path: CrackLeaf-mac-x86_64.dmg
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CrackLeaf-mac-universal-dmg
+          path: CrackLeaf-mac-universal.dmg
